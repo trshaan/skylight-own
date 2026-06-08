@@ -3,7 +3,7 @@ import { useFlights } from "./useFlights"
 
 const CENTER_LAT = 28.5355
 const CENTER_LON = 77.2410
-const SCALE = 3.5 // pixels per km
+const SCALE = 3.5
 
 function latLonToXY(lat: number, lon: number, w: number, h: number) {
   const kmPerDegLat = 111
@@ -16,6 +16,7 @@ function latLonToXY(lat: number, lon: number, w: number, h: number) {
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const flights = useFlights()
+  const trailsRef = useRef<Map<string, {x: number, y: number}[]>>(new Map())
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -29,18 +30,38 @@ function App() {
       if (!f.lat || !f.lon) return
       const { x, y } = latLonToXY(f.lat, f.lon, canvas.width, canvas.height)
 
-      // draw plane dot
-      ctx.beginPath()
-      ctx.arc(x, y, 5, 0, Math.PI * 2)
-      ctx.fillStyle = "#f97316"
-      ctx.fill()
+      const trail = trailsRef.current.get(f.hex) ?? []
+      trail.push({ x, y })
+      if (trail.length > 20) trail.shift()
+      trailsRef.current.set(f.hex, trail)
 
-      // draw label
+      trail.forEach((pos, i) => {
+        const alpha = i / trail.length
+        ctx.beginPath()
+        ctx.arc(pos.x, pos.y, 2, 0, Math.PI * 2)
+        ctx.fillStyle = "rgba(249,115,22," + (alpha * 0.6) + ")"
+        ctx.fill()
+      })
+
+      const angle = ((f.track || 0) * Math.PI) / 180
+      ctx.save()
+      ctx.translate(x, y)
+      ctx.rotate(angle)
+      ctx.fillStyle = "#f97316"
+      ctx.beginPath()
+      ctx.moveTo(0, -8)
+      ctx.lineTo(5, 8)
+      ctx.lineTo(0, 5)
+      ctx.lineTo(-5, 8)
+      ctx.closePath()
+      ctx.fill()
+      ctx.restore()
+
       ctx.fillStyle = "white"
       ctx.font = "11px monospace"
       ctx.fillText(f.flight?.trim() || f.hex, x + 8, y - 8)
       ctx.fillStyle = "#888"
-      ctx.fillText(`${f.alt_baro} ft`, x + 8, y + 4)
+      ctx.fillText(f.alt_baro + " ft", x + 8, y + 4)
     })
   }, [flights])
 
