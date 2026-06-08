@@ -13,10 +13,24 @@ function latLonToXY(lat: number, lon: number, w: number, h: number) {
   return { x, y }
 }
 
+function altitudeColor(alt: number) {
+  if (alt > 25000) return "#38bdf8"
+  if (alt > 15000) return "#a3e635"
+  if (alt > 5000) return "#f97316"
+  return "#ef4444"
+}
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const flights = useFlights()
   const trailsRef = useRef<Map<string, {x: number, y: number}[]>>(new Map())
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+  }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -29,6 +43,7 @@ function App() {
     flights.forEach((f) => {
       if (!f.lat || !f.lon) return
       const { x, y } = latLonToXY(f.lat, f.lon, canvas.width, canvas.height)
+      const color = altitudeColor(f.alt_baro || 0)
 
       const trail = trailsRef.current.get(f.hex) ?? []
       trail.push({ x, y })
@@ -47,7 +62,7 @@ function App() {
       ctx.save()
       ctx.translate(x, y)
       ctx.rotate(angle)
-      ctx.fillStyle = "#f97316"
+      ctx.fillStyle = color
       ctx.beginPath()
       ctx.moveTo(0, -8)
       ctx.lineTo(5, 8)
@@ -57,19 +72,27 @@ function App() {
       ctx.fill()
       ctx.restore()
 
+      const label = f.flight?.trim() || f.hex
+      const route = f.orig_iata && f.dest_iata ? f.orig_iata + " → " + f.dest_iata : ""
+      const speed = f.gs ? Math.round(f.gs) + " kt" : ""
+
       ctx.fillStyle = "white"
       ctx.font = "11px monospace"
-      ctx.fillText(f.flight?.trim() || f.hex, x + 8, y - 8)
-      ctx.fillStyle = "#888"
-      ctx.fillText(f.alt_baro + " ft", x + 8, y + 4)
+      ctx.fillText(label, x + 10, y - 10)
+      ctx.fillStyle = color
+      ctx.font = "10px monospace"
+      ctx.fillText((f.alt_baro || 0) + " ft  " + speed, x + 10, y + 2)
+      if (route) {
+        ctx.fillStyle = "#888"
+        ctx.fillText(route, x + 10, y + 14)
+      }
     })
   }, [flights])
 
   return (
     <canvas
       ref={canvasRef}
-      width={window.innerWidth}
-      height={window.innerHeight}
+      style={{ display: "block", background: "black" }}
     />
   )
 }

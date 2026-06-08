@@ -8,7 +8,8 @@ export type Flight = {
   alt_baro: number
   gs: number
   track: number
-  desc?: string
+  orig_iata?: string
+  dest_iata?: string
 }
 
 export function useFlights() {
