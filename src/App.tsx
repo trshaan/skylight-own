@@ -129,6 +129,7 @@ function App() {
         ctx.rotate(angle)
         drawPlane(ctx, color)
         ctx.restore()
+      ctx.shadowBlur = 0
 
         const label = f.flight?.trim() || f.hex
         const speed = f.gs ? Math.round(f.gs) + " kt" : ""
