@@ -96,7 +96,22 @@ function App() {
       const t = Math.min((Date.now() - lastUpdateRef.current) / UPDATE_INTERVAL, 1)
 
       ctx.clearRect(0, 0, canvas.width, canvas.height)
-
+      // compass ring
+      const cx = canvas.width / 2
+      const cy = canvas.height / 2
+      ctx.strokeStyle = "rgba(255,255,255,0.08)"
+      ctx.lineWidth = 1
+      ;[100, 200, 300].forEach(r => {
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.stroke()
+      })
+      ctx.fillStyle = "rgba(255,255,255,0.2)"
+      ctx.font = "12px monospace"
+      ctx.fillText("N", cx - 5, cy - 310)
+      ctx.fillText("S", cx - 5, cy + 320)
+      ctx.fillText("E", cx + 312, cy + 4)
+      ctx.fillText("W", cx - 320, cy + 4)
       flightsRef.current.forEach((f) => {
         if (!f.lat || !f.lon) return
 
