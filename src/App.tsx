@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useFlights } from "./useFlights"
 
-const SCALE = 5
+let SCALE = 5
 const UPDATE_INTERVAL = 5000
 
 function latLonToXY(lat: number, lon: number, clat: number, clon: number, w: number, h: number) {
@@ -39,12 +39,11 @@ export default function App() {
   const lastUpdate = useRef(Date.now())
   const raf = useRef(0)
   const [selected, setSelected] = useState<{f:any,x:number,y:number}|null>(null)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
-      p => { setCenter({lat: p.coords.latitude, lon: p.coords.longitude}); setLoading(false) },
-      () => setLoading(false)
+      p => setCenter({lat: p.coords.latitude, lon: p.coords.longitude}),
+      () => {}
     )
   }, [])
 
@@ -79,23 +78,21 @@ export default function App() {
       ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1
       ;[100,200,300].forEach(r => { ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke() })
       ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.font = "12px monospace"
-      ctx.fillText("N", cx-5, cy-310);
-       ctx.fillText("S", cx-5, cy+320)
-      ctx.fillText("E", cx+312, cy+4)
-      ; ctx.fillText("W", cx-320, cy+4)
- // IGI Airport runways
-const rwys = [
-  [28.5665, 77.0890, 28.5562, 77.1180],
-  [28.5530, 77.0850, 28.5440, 77.1100],
-]
-ctx.strokeStyle = "rgba(100,200,255,0.3)"
-ctx.lineWidth = 4
-rwys.forEach(([lat1,lon1,lat2,lon2]) => {
-  const a = latLonToXY(lat1,lon1,c.lat,c.lon,W,H)
-  const b = latLonToXY(lat2,lon2,c.lat,c.lon,W,H)
-  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke()
-})
-ctx.lineWidth = 1
+      ctx.fillText("N", cx-5, cy-310); ctx.fillText("S", cx-5, cy+320)
+      ctx.fillText("E", cx+312, cy+4); ctx.fillText("W", cx-320, cy+4)
+
+      const rwys = [
+        [28.5665, 77.0890, 28.5562, 77.1180],
+        [28.5530, 77.0850, 28.5440, 77.1100],
+      ]
+      ctx.strokeStyle = "rgba(100,200,255,0.3)"; ctx.lineWidth = 4
+      rwys.forEach(([lat1,lon1,lat2,lon2]) => {
+        const a = latLonToXY(lat1,lon1,c.lat,c.lon,W,H)
+        const b = latLonToXY(lat2,lon2,c.lat,c.lon,W,H)
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke()
+      })
+      ctx.lineWidth = 1
+
       flightsRef.current.forEach(f => {
         if (!f.lat||!f.lon) return
         const p = prev.current.get(f.hex); const cu = cur.current.get(f.hex)
@@ -124,9 +121,19 @@ ctx.lineWidth = 1
     return () => cancelAnimationFrame(raf.current)
   }, [])
 
+  const airlineCounts = Object.entries(
+    flights.reduce((acc, f) => {
+      const code = f.flight?.trim().slice(0,3) || "???"
+      acc[code] = (acc[code]||0) + 1
+      return acc
+    }, {} as Record<string,number>)
+  ).sort((a,b) => b[1]-a[1]).slice(0,6)
+
   return (
     <>
-      <canvas ref={canvasRef} width={window.innerWidth} height={window.innerHeight} style={{display:"block",background:"black"}}
+      <canvas ref={canvasRef} width={window.innerWidth} height={window.innerHeight}
+        style={{display:"block",background:"black"}}
+        onWheel={e => { SCALE = Math.max(1, Math.min(20, SCALE - e.deltaY * 0.01)) }}
         onClick={e => {
           const c = centerRef.current
           const r = canvasRef.current!.getBoundingClientRect()
@@ -139,9 +146,13 @@ ctx.lineWidth = 1
           setSelected(hit?{f:hit,x:e.clientX,y:e.clientY}:null)
         }}
       />
-      {loading && <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",color:"rgba(255,255,255,0.4)",fontFamily:"monospace",fontSize:13}}>locating...</div>}
       <div style={{position:"fixed",top:16,right:16,color:"rgba(255,255,255,0.4)",fontFamily:"monospace",fontSize:11}}>{flights.length} aircraft</div>
       <div onClick={()=>document.documentElement.requestFullscreen()} style={{position:"fixed",bottom:16,right:16,color:"rgba(255,255,255,0.3)",fontFamily:"monospace",fontSize:11,cursor:"pointer"}}>⛶ fullscreen</div>
+      <div style={{position:"fixed",bottom:16,left:16,fontFamily:"monospace",fontSize:11,lineHeight:"1.8"}}>
+        {airlineCounts.map(([code,count]) => (
+          <div key={code} style={{color:"rgba(255,255,255,0.4)"}}>{code} — {count}</div>
+        ))}
+      </div>
       {selected && (
         <div style={{position:"fixed",left:selected.x+16,top:selected.y-60,background:"rgba(0,0,0,0.85)",border:"1px solid #f97316",borderRadius:8,padding:"10px 14px",color:"white",fontFamily:"monospace",fontSize:12,zIndex:10,minWidth:180}}>
           <div style={{color:"#f97316",fontSize:14,marginBottom:4}}>{selected.f.flight?.trim()||selected.f.hex}</div>
@@ -151,29 +162,6 @@ ctx.lineWidth = 1
           <div style={{color:"#888",marginTop:4}}>{selected.f.desc||"unknown type"}</div>
         </div>
       )}
-      <div style={{
-  position: "fixed",
-  bottom: 16,
-  left: 16,
-  fontFamily: "monospace",
-  fontSize: 11,
-  lineHeight: "1.8"
-}}>
-  {Object.entries(
-    flights.reduce((acc, f) => {
-      const airline = f.flight?.trim().slice(0,3) || "???"
-      acc[airline] = (acc[airline] || 0) + 1
-      return acc
-    }, {} as Record<string,number>)
-  )
-  .sort((a,b) => b[1]-a[1])
-  .slice(0,6)
-  .map(([code, count]) => (
-    <div key={code} style={{color: "rgba(255,255,255,0.4)"}}>
-      {code} — {count}
-    </div>
-  ))}
-</div>
     </>
   )
 }
