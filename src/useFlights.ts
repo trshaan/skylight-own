@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 
 export type Flight = {
   hex: string
@@ -14,6 +14,7 @@ export type Flight = {
 
 export function useFlights() {
   const [flights, setFlights] = useState<Flight[]>([])
+  const prevRef = useRef<Map<string, Flight>>(new Map())
 
   useEffect(() => {
     const fetch_flights = async () => {
@@ -21,7 +22,9 @@ export function useFlights() {
         "https://api.airplanes.live/v2/point/28.5355/77.2410/100"
       )
       const data = await res.json()
-      setFlights(data.ac ?? [])
+      const incoming: Flight[] = data.ac ?? []
+      prevRef.current = new Map(flights.map(f => [f.hex, f]))
+      setFlights(incoming)
     }
 
     fetch_flights()
