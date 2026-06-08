@@ -79,8 +79,23 @@ export default function App() {
       ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1
       ;[100,200,300].forEach(r => { ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke() })
       ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.font = "12px monospace"
-      ctx.fillText("N", cx-5, cy-310); ctx.fillText("S", cx-5, cy+320)
-      ctx.fillText("E", cx+312, cy+4); ctx.fillText("W", cx-320, cy+4)
+      ctx.fillText("N", cx-5, cy-310);
+       ctx.fillText("S", cx-5, cy+320)
+      ctx.fillText("E", cx+312, cy+4)
+      ; ctx.fillText("W", cx-320, cy+4)
+ // IGI Airport runways
+const rwys = [
+  [28.5665, 77.0890, 28.5562, 77.1180],
+  [28.5530, 77.0850, 28.5440, 77.1100],
+]
+ctx.strokeStyle = "rgba(100,200,255,0.3)"
+ctx.lineWidth = 4
+rwys.forEach(([lat1,lon1,lat2,lon2]) => {
+  const a = latLonToXY(lat1,lon1,c.lat,c.lon,W,H)
+  const b = latLonToXY(lat2,lon2,c.lat,c.lon,W,H)
+  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke()
+})
+ctx.lineWidth = 1
       flightsRef.current.forEach(f => {
         if (!f.lat||!f.lon) return
         const p = prev.current.get(f.hex); const cu = cur.current.get(f.hex)
@@ -136,6 +151,29 @@ export default function App() {
           <div style={{color:"#888",marginTop:4}}>{selected.f.desc||"unknown type"}</div>
         </div>
       )}
+      <div style={{
+  position: "fixed",
+  bottom: 16,
+  left: 16,
+  fontFamily: "monospace",
+  fontSize: 11,
+  lineHeight: "1.8"
+}}>
+  {Object.entries(
+    flights.reduce((acc, f) => {
+      const airline = f.flight?.trim().slice(0,3) || "???"
+      acc[airline] = (acc[airline] || 0) + 1
+      return acc
+    }, {} as Record<string,number>)
+  )
+  .sort((a,b) => b[1]-a[1])
+  .slice(0,6)
+  .map(([code, count]) => (
+    <div key={code} style={{color: "rgba(255,255,255,0.4)"}}>
+      {code} — {count}
+    </div>
+  ))}
+</div>
     </>
   )
 }
