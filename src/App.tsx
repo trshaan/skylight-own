@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useFlights } from "./useFlights"
 
 const CENTER_LAT = 28.5355
@@ -22,6 +22,8 @@ function altitudeColor(alt: number) {
 }
 
 function drawPlane(ctx: CanvasRenderingContext2D, color: string) {
+  ctx.shadowColor = color
+  ctx.shadowBlur = 30
   ctx.fillStyle = color
   ctx.beginPath()
   ctx.moveTo(0, -12)
@@ -52,6 +54,7 @@ function drawPlane(ctx: CanvasRenderingContext2D, color: string) {
   ctx.lineTo(1, 6)
   ctx.closePath()
   ctx.fill()
+  ctx.shadowBlur = 0
 }
 
 type Pos = { x: number; y: number }
@@ -65,12 +68,12 @@ function App() {
   const lastUpdateRef = useRef<number>(Date.now())
   const rafRef = useRef<number>(0)
   const flightsRef = useRef(flights)
+  const [selected, setSelected] = useState<{flight: any, x: number, y: number} | null>(null)
 
   useEffect(() => {
     flightsRef.current = flights
     const canvas = canvasRef.current
     if (!canvas) return
-    lastUpdateRef.now = Date.now()
 
     flights.forEach((f) => {
       if (!f.lat || !f.lon) return
@@ -94,17 +97,16 @@ function App() {
       if (!ctx) return
 
       const t = Math.min((Date.now() - lastUpdateRef.current) / UPDATE_INTERVAL, 1)
-
       ctx.clearRect(0, 0, canvas.width, canvas.height)
-      // compass ring
+
       const cx = canvas.width / 2
       const cy = canvas.height / 2
       ctx.strokeStyle = "rgba(255,255,255,0.08)"
       ctx.lineWidth = 1
       ;[100, 200, 300].forEach(r => {
-      ctx.beginPath()
-      ctx.arc(cx, cy, r, 0, Math.PI * 2)
-      ctx.stroke()
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, Math.PI * 2)
+        ctx.stroke()
       })
       ctx.fillStyle = "rgba(255,255,255,0.2)"
       ctx.font = "12px monospace"
@@ -112,6 +114,7 @@ function App() {
       ctx.fillText("S", cx - 5, cy + 320)
       ctx.fillText("E", cx + 312, cy + 4)
       ctx.fillText("W", cx - 320, cy + 4)
+
       flightsRef.current.forEach((f) => {
         if (!f.lat || !f.lon) return
 
@@ -144,7 +147,6 @@ function App() {
         ctx.rotate(angle)
         drawPlane(ctx, color)
         ctx.restore()
-      ctx.shadowBlur = 0
 
         const label = f.flight?.trim() || f.hex
         const speed = f.gs ? Math.round(f.gs) + " kt" : ""
@@ -170,10 +172,48 @@ function App() {
   }, [])
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ display: "block", background: "black" }}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        style={{ display: "block", background: "black" }}
+        onClick={(e) => {
+          const rect = canvasRef.current?.getBoundingClientRect()
+          if (!rect) return
+          const mx = e.clientX - rect.left
+          const my = e.clientY - rect.top
+          const hit = flightsRef.current.find(f => {
+            if (!f.lat || !f.lon) return false
+            const {x, y} = latLonToXY(f.lat, f.lon, window.innerWidth, window.innerHeight)
+            return Math.hypot(mx - x, my - y) < 20
+          })
+          setSelected(hit ? {flight: hit, x: e.clientX, y: e.clientY} : null)
+        }}
+      />
+      {selected && (
+        <div style={{
+          position: "fixed",
+          left: selected.x + 16,
+          top: selected.y - 60,
+          background: "rgba(0,0,0,0.85)",
+          border: "1px solid #f97316",
+          borderRadius: 8,
+          padding: "10px 14px",
+          color: "white",
+          fontFamily: "monospace",
+          fontSize: 12,
+          zIndex: 10,
+          minWidth: 180
+        }}>
+          <div style={{color: "#f97316", fontSize: 14, marginBottom: 4}}>
+            {selected.flight.flight?.trim() || selected.flight.hex}
+          </div>
+          <div>{selected.flight.orig_iata} → {selected.flight.dest_iata}</div>
+          <div>Alt: {selected.flight.alt_baro} ft</div>
+          <div>Speed: {Math.round(selected.flight.gs)} kt</div>
+          <div style={{color: "#888", marginTop: 4}}>{selected.flight.desc || "unknown type"}</div>
+        </div>
+      )}
+    </>
   )
 }
 
