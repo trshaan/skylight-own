@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState } from "react"
 
 export type Flight = {
   hex: string
@@ -12,25 +12,23 @@ export type Flight = {
   dest_iata?: string
 }
 
-export function useFlights() {
+export function useFlights(lat: number, lon: number) {
   const [flights, setFlights] = useState<Flight[]>([])
-  const prevRef = useRef<Map<string, Flight>>(new Map())
 
   useEffect(() => {
+    if (!lat || !lon) return
     const fetch_flights = async () => {
       const res = await fetch(
-        "https://api.airplanes.live/v2/point/28.5355/77.2410/100"
+        `https://api.airplanes.live/v2/point/${lat}/${lon}/100`
       )
       const data = await res.json()
-      const incoming: Flight[] = data.ac ?? []
-      prevRef.current = new Map(flights.map(f => [f.hex, f]))
-      setFlights(incoming)
+      setFlights(data.ac ?? [])
     }
 
     fetch_flights()
     const interval = setInterval(fetch_flights, 5000)
     return () => clearInterval(interval)
-  }, [])
+  }, [lat, lon])
 
   return flights
 }

@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from "react"
 import { useFlights } from "./useFlights"
 
-const CENTER_LAT = 28.5355
-const CENTER_LON = 77.2410
 const SCALE = 5
 const UPDATE_INTERVAL = 5000
 
-function latLonToXY(lat: number, lon: number, w: number, h: number) {
+function latLonToXY(lat: number, lon: number, centerLat: number, centerLon: number, w: number, h: number) {
   const kmPerDegLat = 111
-  const kmPerDegLon = 111 * Math.cos((CENTER_LAT * Math.PI) / 180)
-  const x = w / 2 + (lon - CENTER_LON) * kmPerDegLon * SCALE
-  const y = h / 2 - (lat - CENTER_LAT) * kmPerDegLat * SCALE
+  const kmPerDegLon = 111 * Math.cos((centerLat * Math.PI) / 180)
+  const x = w / 2 + (lon - centerLon) * kmPerDegLon * SCALE
+  const y = h / 2 - (lat - centerLat) * kmPerDegLat * SCALE
   return { x, y }
 }
 
@@ -61,30 +59,44 @@ type Pos = { x: number; y: number }
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const flights = useFlights()
+  const [center, setCenter] = useState<{lat: number, lon: number} | null>(null)
+  const [locError, setLocError] = useState(false)
+  const flights = useFlights(center?.lat ?? 0, center?.lon ?? 0)
   const trailsRef = useRef<Map<string, Pos[]>>(new Map())
   const prevPosRef = useRef<Map<string, Pos>>(new Map())
   const curPosRef = useRef<Map<string, Pos>>(new Map())
   const lastUpdateRef = useRef<number>(Date.now())
   const rafRef = useRef<number>(0)
   const flightsRef = useRef(flights)
+  const centerRef = useRef(center)
   const [selected, setSelected] = useState<{flight: any, x: number, y: number} | null>(null)
 
   useEffect(() => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setCenter({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => {
+        setLocError(true)
+        setCenter({ lat: 28.5355, lon: 77.2410 })
+      }
+    )
+  }, [])
+
+  useEffect(() => {
     flightsRef.current = flights
+    centerRef.current = center
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || !center) return
 
     flights.forEach((f) => {
       if (!f.lat || !f.lon) return
-      const newPos = latLonToXY(f.lat, f.lon, canvas.width, canvas.height)
+      const newPos = latLonToXY(f.lat, f.lon, center.lat, center.lon, canvas.width, canvas.height)
       const old = curPosRef.current.get(f.hex)
       prevPosRef.current.set(f.hex, old ?? newPos)
       curPosRef.current.set(f.hex, newPos)
     })
 
     lastUpdateRef.current = Date.now()
-  }, [flights])
+  }, [flights, center])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -95,6 +107,8 @@ function App() {
     const draw = () => {
       const ctx = canvas.getContext("2d")
       if (!ctx) return
+      const c = centerRef.current
+      if (!c) { rafRef.current = requestAnimationFrame(draw); return }
 
       const t = Math.min((Date.now() - lastUpdateRef.current) / UPDATE_INTERVAL, 1)
       ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -117,7 +131,6 @@ function App() {
 
       flightsRef.current.forEach((f) => {
         if (!f.lat || !f.lon) return
-
         const prev = prevPosRef.current.get(f.hex)
         const cur = curPosRef.current.get(f.hex)
         if (!prev || !cur) return
@@ -171,24 +184,37 @@ function App() {
     return () => cancelAnimationFrame(rafRef.current)
   }, [])
 
+  if (!center) return (
+    <div style={{color: "white", background: "black", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace", fontSize: 16}}>
+      {locError ? "location denied — defaulting to Delhi" : "requesting location..."}
+    </div>
+  )
+
   return (
     <>
       <canvas
         ref={canvasRef}
         style={{ display: "block", background: "black" }}
         onClick={(e) => {
+          const c = centerRef.current
+          if (!c) return
           const rect = canvasRef.current?.getBoundingClientRect()
           if (!rect) return
           const mx = e.clientX - rect.left
           const my = e.clientY - rect.top
           const hit = flightsRef.current.find(f => {
             if (!f.lat || !f.lon) return false
-            const {x, y} = latLonToXY(f.lat, f.lon, window.innerWidth, window.innerHeight)
+            const {x, y} = latLonToXY(f.lat, f.lon, c.lat, c.lon, window.innerWidth, window.innerHeight)
             return Math.hypot(mx - x, my - y) < 20
           })
           setSelected(hit ? {flight: hit, x: e.clientX, y: e.clientY} : null)
         }}
       />
+      {locError && (
+        <div style={{position: "fixed", bottom: 16, left: 16, color: "#888", fontFamily: "monospace", fontSize: 11}}>
+          location denied — showing Delhi
+        </div>
+      )}
       {selected && (
         <div style={{
           position: "fixed",
