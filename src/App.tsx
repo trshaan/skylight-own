@@ -4,15 +4,13 @@ import { useFlights } from "./useFlights"
 const SCALE = 5
 const UPDATE_INTERVAL = 5000
 
-function latLonToXY(lat: number, lon: number, centerLat: number, centerLon: number, w: number, h: number) {
-  const kmPerDegLat = 111
-  const kmPerDegLon = 111 * Math.cos((centerLat * Math.PI) / 180)
-  const x = w / 2 + (lon - centerLon) * kmPerDegLon * SCALE
-  const y = h / 2 - (lat - centerLat) * kmPerDegLat * SCALE
+function latLonToXY(lat: number, lon: number, clat: number, clon: number, w: number, h: number) {
+  const x = w / 2 + (lon - clon) * 111 * Math.cos(clat * Math.PI / 180) * SCALE
+  const y = h / 2 - (lat - clat) * 111 * SCALE
   return { x, y }
 }
 
-function altitudeColor(alt: number) {
+function altColor(alt: number) {
   if (alt > 25000) return "#38bdf8"
   if (alt > 15000) return "#a3e635"
   if (alt > 5000) return "#f97316"
@@ -20,64 +18,33 @@ function altitudeColor(alt: number) {
 }
 
 function drawPlane(ctx: CanvasRenderingContext2D, color: string) {
-  ctx.shadowColor = color
-  ctx.shadowBlur = 30
-  ctx.fillStyle = color
-  ctx.beginPath()
-  ctx.moveTo(0, -12)
-  ctx.lineTo(2, -4)
-  ctx.lineTo(2, 6)
-  ctx.lineTo(0, 8)
-  ctx.lineTo(-2, 6)
-  ctx.lineTo(-2, -4)
-  ctx.closePath()
-  ctx.fill()
-  ctx.beginPath()
-  ctx.moveTo(-2, 0)
-  ctx.lineTo(-12, 6)
-  ctx.lineTo(-10, 8)
-  ctx.lineTo(0, 4)
-  ctx.lineTo(10, 8)
-  ctx.lineTo(12, 6)
-  ctx.lineTo(2, 0)
-  ctx.closePath()
-  ctx.fill()
-  ctx.beginPath()
-  ctx.moveTo(-1, 6)
-  ctx.lineTo(-5, 10)
-  ctx.lineTo(-4, 11)
-  ctx.lineTo(0, 8)
-  ctx.lineTo(4, 11)
-  ctx.lineTo(5, 10)
-  ctx.lineTo(1, 6)
-  ctx.closePath()
-  ctx.fill()
+  ctx.shadowColor = color; ctx.shadowBlur = 30; ctx.fillStyle = color
+  ctx.beginPath(); ctx.moveTo(0,-12); ctx.lineTo(2,-4); ctx.lineTo(2,6); ctx.lineTo(0,8); ctx.lineTo(-2,6); ctx.lineTo(-2,-4); ctx.closePath(); ctx.fill()
+  ctx.beginPath(); ctx.moveTo(-2,0); ctx.lineTo(-12,6); ctx.lineTo(-10,8); ctx.lineTo(0,4); ctx.lineTo(10,8); ctx.lineTo(12,6); ctx.lineTo(2,0); ctx.closePath(); ctx.fill()
+  ctx.beginPath(); ctx.moveTo(-1,6); ctx.lineTo(-5,10); ctx.lineTo(-4,11); ctx.lineTo(0,8); ctx.lineTo(4,11); ctx.lineTo(5,10); ctx.lineTo(1,6); ctx.closePath(); ctx.fill()
   ctx.shadowBlur = 0
 }
 
 type Pos = { x: number; y: number }
 
-function App() {
+export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [center, setCenter] = useState<{lat: number, lon: number} | null>(null)
-  const [locError, setLocError] = useState(false)
-  const flights = useFlights(center?.lat ?? 0, center?.lon ?? 0)
-  const trailsRef = useRef<Map<string, Pos[]>>(new Map())
-  const prevPosRef = useRef<Map<string, Pos>>(new Map())
-  const curPosRef = useRef<Map<string, Pos>>(new Map())
-  const lastUpdateRef = useRef<number>(Date.now())
-  const rafRef = useRef<number>(0)
+  const [center, setCenter] = useState<{lat:number,lon:number}>({lat:28.5355,lon:77.2410})
+  const flights = useFlights(center.lat, center.lon)
   const flightsRef = useRef(flights)
   const centerRef = useRef(center)
-  const [selected, setSelected] = useState<{flight: any, x: number, y: number} | null>(null)
+  const trails = useRef<Map<string,Pos[]>>(new Map())
+  const prev = useRef<Map<string,Pos>>(new Map())
+  const cur = useRef<Map<string,Pos>>(new Map())
+  const lastUpdate = useRef(Date.now())
+  const raf = useRef(0)
+  const [selected, setSelected] = useState<{f:any,x:number,y:number}|null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
-      (pos) => setCenter({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-      () => {
-        setLocError(true)
-        setCenter({ lat: 28.5355, lon: 77.2410 })
-      }
+      p => { setCenter({lat: p.coords.latitude, lon: p.coords.longitude}); setLoading(false) },
+      () => setLoading(false)
     )
   }, [])
 
@@ -85,17 +52,15 @@ function App() {
     flightsRef.current = flights
     centerRef.current = center
     const canvas = canvasRef.current
-    if (!canvas || !center) return
-
-    flights.forEach((f) => {
-      if (!f.lat || !f.lon) return
-      const newPos = latLonToXY(f.lat, f.lon, center.lat, center.lon, canvas.width, canvas.height)
-      const old = curPosRef.current.get(f.hex)
-      prevPosRef.current.set(f.hex, old ?? newPos)
-      curPosRef.current.set(f.hex, newPos)
+    if (!canvas) return
+    const W = window.innerWidth, H = window.innerHeight
+    flights.forEach(f => {
+      if (!f.lat||!f.lon) return
+      const np = latLonToXY(f.lat, f.lon, center.lat, center.lon, W, H)
+      prev.current.set(f.hex, cur.current.get(f.hex) ?? np)
+      cur.current.set(f.hex, np)
     })
-
-    lastUpdateRef.current = Date.now()
+    lastUpdate.current = Date.now()
   }, [flights, center])
 
   useEffect(() => {
@@ -104,143 +69,73 @@ function App() {
     canvas.width = window.innerWidth
     canvas.height = window.innerHeight
 
-    const draw = () => {
-      const ctx = canvas.getContext("2d")
-      if (!ctx) return
+    function draw() {
+      const ctx = canvas!.getContext("2d")!
       const c = centerRef.current
-      if (!c) { rafRef.current = requestAnimationFrame(draw); return }
-
-      const t = Math.min((Date.now() - lastUpdateRef.current) / UPDATE_INTERVAL, 1)
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-      const cx = canvas.width / 2
-      const cy = canvas.height / 2
-      ctx.strokeStyle = "rgba(255,255,255,0.08)"
-      ctx.lineWidth = 1
-      ;[100, 200, 300].forEach(r => {
-        ctx.beginPath()
-        ctx.arc(cx, cy, r, 0, Math.PI * 2)
-        ctx.stroke()
-      })
-      ctx.fillStyle = "rgba(255,255,255,0.2)"
-      ctx.font = "12px monospace"
-      ctx.fillText("N", cx - 5, cy - 310)
-      ctx.fillText("S", cx - 5, cy + 320)
-      ctx.fillText("E", cx + 312, cy + 4)
-      ctx.fillText("W", cx - 320, cy + 4)
-
-      flightsRef.current.forEach((f) => {
-        if (!f.lat || !f.lon) return
-        const prev = prevPosRef.current.get(f.hex)
-        const cur = curPosRef.current.get(f.hex)
-        if (!prev || !cur) return
-
-        const x = prev.x + (cur.x - prev.x) * t
-        const y = prev.y + (cur.y - prev.y) * t
-        const color = altitudeColor(f.alt_baro || 0)
-
-        const trail = trailsRef.current.get(f.hex) ?? []
-        if (trail.length === 0 || Math.hypot(x - trail[trail.length-1].x, y - trail[trail.length-1].y) > 1) {
-          trail.push({ x, y })
-          if (trail.length > 40) trail.shift()
-          trailsRef.current.set(f.hex, trail)
+      const W = canvas!.width, H = canvas!.height
+      const t = Math.min((Date.now() - lastUpdate.current) / UPDATE_INTERVAL, 1)
+      ctx.clearRect(0,0,W,H)
+      const cx = W/2, cy = H/2
+      ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1
+      ;[100,200,300].forEach(r => { ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke() })
+      ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.font = "12px monospace"
+      ctx.fillText("N", cx-5, cy-310); ctx.fillText("S", cx-5, cy+320)
+      ctx.fillText("E", cx+312, cy+4); ctx.fillText("W", cx-320, cy+4)
+      flightsRef.current.forEach(f => {
+        if (!f.lat||!f.lon) return
+        const p = prev.current.get(f.hex); const cu = cur.current.get(f.hex)
+        if (!p||!cu) return
+        const x = p.x+(cu.x-p.x)*t; const y = p.y+(cu.y-p.y)*t
+        const color = altColor(f.alt_baro||0)
+        const trail = trails.current.get(f.hex)??[]
+        if (!trail.length||Math.hypot(x-trail[trail.length-1].x,y-trail[trail.length-1].y)>1) {
+          trail.push({x,y}); if(trail.length>40) trail.shift(); trails.current.set(f.hex,trail)
         }
-
-        trail.forEach((pos, i) => {
-          const alpha = i / trail.length
-          ctx.beginPath()
-          ctx.arc(pos.x, pos.y, 1.5, 0, Math.PI * 2)
-          ctx.fillStyle = "rgba(249,115,22," + (alpha * 0.5) + ")"
-          ctx.fill()
+        trail.forEach((pos,i) => {
+          ctx.beginPath(); ctx.arc(pos.x,pos.y,1.5,0,Math.PI*2)
+          ctx.fillStyle=`rgba(249,115,22,${(i/trail.length)*0.5})`; ctx.fill()
         })
-
-        const angle = ((f.track || 0) * Math.PI) / 180
-        ctx.save()
-        ctx.translate(x, y)
-        ctx.rotate(angle)
-        drawPlane(ctx, color)
-        ctx.restore()
-
-        const label = f.flight?.trim() || f.hex
-        const speed = f.gs ? Math.round(f.gs) + " kt" : ""
-        const route = f.orig_iata && f.dest_iata ? f.orig_iata + " → " + f.dest_iata : ""
-
-        ctx.fillStyle = "white"
-        ctx.font = "11px monospace"
-        ctx.fillText(label, x + 14, y - 8)
-        ctx.fillStyle = color
-        ctx.font = "10px monospace"
-        ctx.fillText((f.alt_baro || 0) + " ft  " + speed, x + 14, y + 4)
-        if (route) {
-          ctx.fillStyle = "#888"
-          ctx.fillText(route, x + 14, y + 16)
-        }
+        ctx.save(); ctx.translate(x,y); ctx.rotate(((f.track||0)*Math.PI)/180)
+        drawPlane(ctx,color); ctx.restore()
+        ctx.fillStyle="white"; ctx.font="11px monospace"
+        ctx.fillText(f.flight?.trim()||f.hex, x+14, y-8)
+        ctx.fillStyle=color; ctx.font="10px monospace"
+        ctx.fillText(`${f.alt_baro||0} ft  ${f.gs?Math.round(f.gs)+" kt":""}`, x+14, y+4)
+        if (f.orig_iata&&f.dest_iata) { ctx.fillStyle="#888"; ctx.fillText(`${f.orig_iata} → ${f.dest_iata}`, x+14, y+16) }
       })
-
-      rafRef.current = requestAnimationFrame(draw)
+      raf.current = requestAnimationFrame(draw)
     }
-
-    rafRef.current = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(rafRef.current)
+    raf.current = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(raf.current)
   }, [])
-
-  if (!center) return (
-    <div style={{color: "white", background: "black", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace", fontSize: 16}}>
-      {locError ? "location denied — defaulting to Delhi" : "requesting location..."}
-    </div>
-  )
 
   return (
     <>
-      <canvas
-        ref={canvasRef}
-        style={{ display: "block", background: "black" }}
-        onClick={(e) => {
+      <canvas ref={canvasRef} width={window.innerWidth} height={window.innerHeight} style={{display:"block",background:"black"}}
+        onClick={e => {
           const c = centerRef.current
-          if (!c) return
-          const rect = canvasRef.current?.getBoundingClientRect()
-          if (!rect) return
-          const mx = e.clientX - rect.left
-          const my = e.clientY - rect.top
+          const r = canvasRef.current!.getBoundingClientRect()
+          const mx = e.clientX-r.left, my = e.clientY-r.top
           const hit = flightsRef.current.find(f => {
-            if (!f.lat || !f.lon) return false
-            const {x, y} = latLonToXY(f.lat, f.lon, c.lat, c.lon, window.innerWidth, window.innerHeight)
-            return Math.hypot(mx - x, my - y) < 20
+            if (!f.lat||!f.lon) return false
+            const {x,y} = latLonToXY(f.lat,f.lon,c.lat,c.lon,window.innerWidth,window.innerHeight)
+            return Math.hypot(mx-x,my-y)<20
           })
-          setSelected(hit ? {flight: hit, x: e.clientX, y: e.clientY} : null)
+          setSelected(hit?{f:hit,x:e.clientX,y:e.clientY}:null)
         }}
       />
-      {locError && (
-        <div style={{position: "fixed", bottom: 16, left: 16, color: "#888", fontFamily: "monospace", fontSize: 11}}>
-          location denied — showing Delhi
-        </div>
-      )}
+      {loading && <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",color:"rgba(255,255,255,0.4)",fontFamily:"monospace",fontSize:13}}>locating...</div>}
+      <div style={{position:"fixed",top:16,right:16,color:"rgba(255,255,255,0.4)",fontFamily:"monospace",fontSize:11}}>{flights.length} aircraft</div>
+      <div onClick={()=>document.documentElement.requestFullscreen()} style={{position:"fixed",bottom:16,right:16,color:"rgba(255,255,255,0.3)",fontFamily:"monospace",fontSize:11,cursor:"pointer"}}>⛶ fullscreen</div>
       {selected && (
-        <div style={{
-          position: "fixed",
-          left: selected.x + 16,
-          top: selected.y - 60,
-          background: "rgba(0,0,0,0.85)",
-          border: "1px solid #f97316",
-          borderRadius: 8,
-          padding: "10px 14px",
-          color: "white",
-          fontFamily: "monospace",
-          fontSize: 12,
-          zIndex: 10,
-          minWidth: 180
-        }}>
-          <div style={{color: "#f97316", fontSize: 14, marginBottom: 4}}>
-            {selected.flight.flight?.trim() || selected.flight.hex}
-          </div>
-          <div>{selected.flight.orig_iata} → {selected.flight.dest_iata}</div>
-          <div>Alt: {selected.flight.alt_baro} ft</div>
-          <div>Speed: {Math.round(selected.flight.gs)} kt</div>
-          <div style={{color: "#888", marginTop: 4}}>{selected.flight.desc || "unknown type"}</div>
+        <div style={{position:"fixed",left:selected.x+16,top:selected.y-60,background:"rgba(0,0,0,0.85)",border:"1px solid #f97316",borderRadius:8,padding:"10px 14px",color:"white",fontFamily:"monospace",fontSize:12,zIndex:10,minWidth:180}}>
+          <div style={{color:"#f97316",fontSize:14,marginBottom:4}}>{selected.f.flight?.trim()||selected.f.hex}</div>
+          <div>{selected.f.orig_iata} → {selected.f.dest_iata}</div>
+          <div>Alt: {selected.f.alt_baro} ft</div>
+          <div>Speed: {Math.round(selected.f.gs)} kt</div>
+          <div style={{color:"#888",marginTop:4}}>{selected.f.desc||"unknown type"}</div>
         </div>
       )}
     </>
   )
 }
-
-export default App
