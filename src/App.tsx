@@ -111,7 +111,9 @@ export default function App() {
           ctx.fillStyle=`rgba(249,115,22,${(i/trail.length)*0.5})`; ctx.fill()
         })
         ctx.save(); ctx.translate(x,y); ctx.rotate(((f.track||0)*Math.PI)/180)
-        drawPlane(ctx,color); ctx.restore()
+        const isLanding = (f.alt_baro || 0) < 3000
+        const flashColor = isLanding && Math.floor(Date.now() / 500) % 2 === 0 ? "#ef4444" : color
+        drawPlane(ctx, flashColor); ctx.restore()
         ctx.fillStyle="white"; ctx.font="11px monospace"
         ctx.fillText(f.flight?.trim()||f.hex, x+14, y-8)
         ctx.fillStyle=color; ctx.font="10px monospace"
