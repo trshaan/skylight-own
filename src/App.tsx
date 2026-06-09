@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react"
 import { useFlights } from "./useFlights"
 
 let SCALE = 5
+let mirrorX = false
 const UPDATE_INTERVAL = 5000
 
 function latLonToXY(lat: number, lon: number, clat: number, clon: number, w: number, h: number) {
-  const x = w / 2 + (lon - clon) * 111 * Math.cos(clat * Math.PI / 180) * SCALE
+  const raw = w / 2 + (lon - clon) * 111 * Math.cos(clat * Math.PI / 180) * SCALE
+  const x = mirrorX ? w - raw : raw
   const y = h / 2 - (lat - clat) * 111 * SCALE
   return { x, y }
 }
@@ -44,6 +46,7 @@ export default function App() {
   const dragCenter = useRef(center)
   const [nightMode, setNightMode] = useState(false)
   const nightModeRef = useRef(false)
+  const [mirror, setMirror] = useState(false)
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
@@ -80,8 +83,8 @@ export default function App() {
       const t = Math.min((Date.now() - lastUpdate.current) / UPDATE_INTERVAL, 1)
       ctx.clearRect(0,0,W,H)
       if (nightModeRef.current) {
-      ctx.fillStyle = "#140a00"
-      ctx.fillRect(0,0,W,H)
+        ctx.fillStyle = "#140a00"
+        ctx.fillRect(0,0,W,H)
       }
       const cx = W/2, cy = H/2
       ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1
@@ -90,16 +93,12 @@ export default function App() {
       ctx.fillText("N", cx-5, cy-310); ctx.fillText("S", cx-5, cy+320)
       ctx.fillText("E", cx+312, cy+4); ctx.fillText("W", cx-320, cy+4)
 
-      // location dot
       const pulse = (Math.sin(Date.now() / 500) + 1) / 2
-      ctx.beginPath()
-      ctx.arc(cx, cy, 6 + pulse * 4, 0, Math.PI * 2)
-      ctx.fillStyle = `rgba(56,189,248,${0.1 + pulse * 0.2})`
-      ctx.fill()
-      ctx.beginPath()
-      ctx.arc(cx, cy, 4, 0, Math.PI * 2)
-      ctx.fillStyle = "#38bdf8"
-      ctx.fill()
+      ctx.beginPath(); ctx.arc(cx, cy, 6 + pulse * 4, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(56,189,248,${0.1 + pulse * 0.2})`; ctx.fill()
+      ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2)
+      ctx.fillStyle = "#38bdf8"; ctx.fill()
+
       const rwys = [
         [28.5665, 77.0890, 28.5562, 77.1180],
         [28.5530, 77.0850, 28.5440, 77.1100],
@@ -156,19 +155,19 @@ export default function App() {
         style={{display:"block", background: nightMode ? "#140a00" : "black"}}
         onWheel={e => { SCALE = Math.max(1, Math.min(20, SCALE - e.deltaY * 0.01)) }}
         onMouseDown={e => {
-        isDragging.current = true
-        dragStart.current = {x: e.clientX, y: e.clientY}
-        dragCenter.current = centerRef.current
-      }}
-onMouseMove={e => {
-  if (!isDragging.current) return
-  const dx = e.clientX - dragStart.current.x
-  const dy = e.clientY - dragStart.current.y
-  const newLat = dragCenter.current.lat + dy / (111 * SCALE)
-  const newLon = dragCenter.current.lon - dx / (111 * Math.cos(dragCenter.current.lat * Math.PI / 180) * SCALE)
-  setCenter({lat: newLat, lon: newLon})
-}}
-onMouseUp={() => { isDragging.current = false }}
+          isDragging.current = true
+          dragStart.current = {x: e.clientX, y: e.clientY}
+          dragCenter.current = centerRef.current
+        }}
+        onMouseMove={e => {
+          if (!isDragging.current) return
+          const dx = e.clientX - dragStart.current.x
+          const dy = e.clientY - dragStart.current.y
+          const newLat = dragCenter.current.lat + dy / (111 * SCALE)
+          const newLon = dragCenter.current.lon - dx / (111 * Math.cos(dragCenter.current.lat * Math.PI / 180) * SCALE)
+          setCenter({lat: newLat, lon: newLon})
+        }}
+        onMouseUp={() => { isDragging.current = false }}
         onClick={e => {
           const c = centerRef.current
           const r = canvasRef.current!.getBoundingClientRect()
@@ -183,10 +182,17 @@ onMouseUp={() => { isDragging.current = false }}
       />
       <div style={{position:"fixed",top:16,right:16,color:"rgba(255,255,255,0.4)",fontFamily:"monospace",fontSize:11}}>{flights.length} aircraft</div>
       <div onClick={() => { nightModeRef.current = !nightModeRef.current; setNightMode(n => !n) }}
-      style={{position:"fixed",bottom:16,right:100,color: nightMode ? "#fbbf24" : "rgba(255,255,255,0.3)",fontFamily:"monospace",fontSize:11,cursor:"pointer"}}>
-      ◑ {nightMode ? "day" : "night"}
+        style={{position:"fixed",bottom:48,right:16,color: nightMode ? "#fbbf24" : "rgba(255,255,255,0.3)",fontFamily:"monospace",fontSize:11,cursor:"pointer"}}>
+        ◑ {nightMode ? "day" : "night"}
       </div>
-      <div onClick={()=>document.documentElement.requestFullscreen()} style={{position:"fixed",bottom:16,right:16,color:"rgba(255,255,255,0.3)",fontFamily:"monospace",fontSize:11,cursor:"pointer"}}>⛶ fullscreen</div>
+      <div onClick={() => { mirrorX = !mirrorX; setMirror(m => !m) }}
+        style={{position:"fixed",bottom:80,right:16,color: mirror ? "#38bdf8" : "rgba(255,255,255,0.3)",fontFamily:"monospace",fontSize:11,cursor:"pointer"}}>
+        ⇔ {mirror ? "mirrored" : "mirror"}
+      </div>
+      <div onClick={()=>document.documentElement.requestFullscreen()}
+        style={{position:"fixed",bottom:16,right:16,color:"rgba(255,255,255,0.3)",fontFamily:"monospace",fontSize:11,cursor:"pointer"}}>
+        ⛶ fullscreen
+      </div>
       <div style={{position:"fixed",bottom:16,left:16,fontFamily:"monospace",fontSize:11,lineHeight:"1.8"}}>
         {airlineCounts.map(([code,count]) => (
           <div key={code} style={{color:"rgba(255,255,255,0.4)"}}>{code} — {count}</div>
