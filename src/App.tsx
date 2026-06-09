@@ -84,6 +84,16 @@ export default function App() {
       ctx.fillText("N", cx-5, cy-310); ctx.fillText("S", cx-5, cy+320)
       ctx.fillText("E", cx+312, cy+4); ctx.fillText("W", cx-320, cy+4)
 
+      // location dot
+      const pulse = (Math.sin(Date.now() / 500) + 1) / 2
+      ctx.beginPath()
+      ctx.arc(cx, cy, 6 + pulse * 4, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(56,189,248,${0.1 + pulse * 0.2})`
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(cx, cy, 4, 0, Math.PI * 2)
+      ctx.fillStyle = "#38bdf8"
+      ctx.fill()
       const rwys = [
         [28.5665, 77.0890, 28.5562, 77.1180],
         [28.5530, 77.0850, 28.5440, 77.1100],
