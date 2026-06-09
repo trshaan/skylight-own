@@ -39,6 +39,9 @@ export default function App() {
   const lastUpdate = useRef(Date.now())
   const raf = useRef(0)
   const [selected, setSelected] = useState<{f:any,x:number,y:number}|null>(null)
+  const isDragging = useRef(false)
+  const dragStart = useRef<{x:number,y:number}>({x:0,y:0})
+  const dragCenter = useRef(center)
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
@@ -134,6 +137,20 @@ export default function App() {
       <canvas ref={canvasRef} width={window.innerWidth} height={window.innerHeight}
         style={{display:"block",background:"black"}}
         onWheel={e => { SCALE = Math.max(1, Math.min(20, SCALE - e.deltaY * 0.01)) }}
+        onMouseDown={e => {
+        isDragging.current = true
+        dragStart.current = {x: e.clientX, y: e.clientY}
+        dragCenter.current = centerRef.current
+      }}
+onMouseMove={e => {
+  if (!isDragging.current) return
+  const dx = e.clientX - dragStart.current.x
+  const dy = e.clientY - dragStart.current.y
+  const newLat = dragCenter.current.lat + dy / (111 * SCALE)
+  const newLon = dragCenter.current.lon - dx / (111 * Math.cos(dragCenter.current.lat * Math.PI / 180) * SCALE)
+  setCenter({lat: newLat, lon: newLon})
+}}
+onMouseUp={() => { isDragging.current = false }}
         onClick={e => {
           const c = centerRef.current
           const r = canvasRef.current!.getBoundingClientRect()
