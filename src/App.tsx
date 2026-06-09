@@ -42,6 +42,8 @@ export default function App() {
   const isDragging = useRef(false)
   const dragStart = useRef<{x:number,y:number}>({x:0,y:0})
   const dragCenter = useRef(center)
+  const [nightMode, setNightMode] = useState(false)
+  const nightModeRef = useRef(false)
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
@@ -77,6 +79,10 @@ export default function App() {
       const W = canvas!.width, H = canvas!.height
       const t = Math.min((Date.now() - lastUpdate.current) / UPDATE_INTERVAL, 1)
       ctx.clearRect(0,0,W,H)
+      if (nightModeRef.current) {
+      ctx.fillStyle = "#140a00"
+      ctx.fillRect(0,0,W,H)
+      }
       const cx = W/2, cy = H/2
       ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1
       ;[100,200,300].forEach(r => { ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke() })
@@ -147,7 +153,7 @@ export default function App() {
   return (
     <>
       <canvas ref={canvasRef} width={window.innerWidth} height={window.innerHeight}
-        style={{display:"block",background:"black"}}
+        style={{display:"block", background: nightMode ? "#140a00" : "black"}}
         onWheel={e => { SCALE = Math.max(1, Math.min(20, SCALE - e.deltaY * 0.01)) }}
         onMouseDown={e => {
         isDragging.current = true
@@ -176,6 +182,10 @@ onMouseUp={() => { isDragging.current = false }}
         }}
       />
       <div style={{position:"fixed",top:16,right:16,color:"rgba(255,255,255,0.4)",fontFamily:"monospace",fontSize:11}}>{flights.length} aircraft</div>
+      <div onClick={() => { nightModeRef.current = !nightModeRef.current; setNightMode(n => !n) }}
+      style={{position:"fixed",bottom:16,right:100,color: nightMode ? "#fbbf24" : "rgba(255,255,255,0.3)",fontFamily:"monospace",fontSize:11,cursor:"pointer"}}>
+      ◑ {nightMode ? "day" : "night"}
+      </div>
       <div onClick={()=>document.documentElement.requestFullscreen()} style={{position:"fixed",bottom:16,right:16,color:"rgba(255,255,255,0.3)",fontFamily:"monospace",fontSize:11,cursor:"pointer"}}>⛶ fullscreen</div>
       <div style={{position:"fixed",bottom:16,left:16,fontFamily:"monospace",fontSize:11,lineHeight:"1.8"}}>
         {airlineCounts.map(([code,count]) => (
